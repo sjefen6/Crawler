@@ -65,16 +65,13 @@ public class AliveMessenger implements Runnable {
 		String query = "";
 		if (Settings.getCollectorID() == -1){
 			// Insert
-			query = "INSERT INTO simulator(" +
-					"status_id, " + 
-					"ip_adress, " +
-					"last_seen_ts, " +
-					"url) " +
-					"VALUES(?,?,extract(epoch from now()),NULL) RETURNING *";
+			query = "INSERT INTO Crawler(" +
+					"status_id, " +
+					"last_seen_ts ) " +
+					"VALUES(?,extract(epoch from now())) RETURNING *";
 			try {
 				PreparedStatement statement = Settings.getDBC().prepareStatement(query);
 				statement.setInt(1, status_id);
-				statement.setString(2, getIp());
 				ResultSet res = statement.executeQuery();
 				res.next();
 				Settings.setCollectorID(res.getInt("id"));
@@ -83,17 +80,14 @@ public class AliveMessenger implements Runnable {
 			}
 		}else {
 			// Update
-			query = "UPDATE simulator SET " +
+			query = "UPDATE crawler SET " +
 					"status_id = ?, " +
-					"ip_adress = ?, " +
 					"last_seen_ts = extract(epoch from now()), " +
-					"url = NULL " + 
 					"WHERE id = ?";
 			try {
 				PreparedStatement statement = Settings.getDBC().prepareStatement(query);
 				statement.setInt(1, status_id);
-				statement.setString(2, getIp());
-				statement.setInt(3, Settings.getCollectorID());
+				statement.setInt(2, Settings.getCollectorID());
 				statement.executeUpdate();
 			} catch (SQLException e) {
 				e.printStackTrace();
