@@ -1,7 +1,19 @@
 package hikst.crawler;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+/**
+ * AliveMessenger
+ * Reports to the database every minute that it is alive and running.
+ * Make sure settings are correctly set up before using.
+ * Make sure this class gets loaded by the main tread.
+ * The use of timer seem to take care of the rest.
+ * 
+ * Example:
+ * public static void main(String[] args) {
+ * 	new Settings();
+ * 	AliveMessenger.getInstance();
+ * }
+ */
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URL;
@@ -9,18 +21,26 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-import javax.swing.AbstractAction;
-import javax.swing.Timer;
-
-public class AliveMessenger extends AbstractAction {
-	private static AliveMessenger _instance = new AliveMessenger();
+public class AliveMessenger implements Runnable {
+	private static AliveMessenger _instance = new AliveMessenger();;
 	private final int INTERVAL = 60000;
+	private int status_id;
+	private long lastTimeRun;
+	private static Thread messenger;
+	
 
 	private AliveMessenger() {
-		// Make sure update is run once before the timer starts
-		update();
-		// Start updating status on an INTERVAL
-		new Timer(INTERVAL, (ActionListener) this).start();
+		// Status can not be null. Assuming this is set before any Collectors has started, therefor load = low
+		try {
+			status_id = Status.getInstance().getStatusID(Collector.Collector_Work_Status_Low);
+		} catch (StatusIdNotFoundException e) {
+			e.printStackTrace();
+			// I am a vengeful bitch
+			System.exit(0);
+		}
+		
+		messenger = new Thread(this);
+		messenger.start();
 	}
 	
 	// Returning the singleton
@@ -28,13 +48,7 @@ public class AliveMessenger extends AbstractAction {
         return _instance;
     }
 
-    // Overriding for timer
-	@Override
-	public void actionPerformed(ActionEvent arg0) {
-		update();
-	}
-
-	// Returns the current external ip determend by a 3rd party.
+	// Returns the current external ip determined by a 3rd party.
 	private String getIp() {
 		try {
 			URL url = new URL("http://ip.goldclone.no/");
@@ -51,34 +65,62 @@ public class AliveMessenger extends AbstractAction {
 		String query = "";
 		if (Settings.getCollectorID() == -1){
 			// Insert
-			query = "INSERT INTO Crawler(" +
-					"status_id, " +
-					"last_seen_ts ) " +
-					"VALUES(?,extract(epoch from now())) RETURNING *";
+			query = "INSERT INTO simulator(" +
+					"status_id, " + 
+					"ip_adress, " +
+					"last_seen_ts, " +
+					"url) " +
+					"VALUES(?,?,extract(epoch from now()),NULL) RETURNING *";
 			try {
 				PreparedStatement statement = Settings.getDBC().prepareStatement(query);
-				statement.setInt(1, 1);
+				statement.setInt(1, status_id);
+				statement.setString(2, getIp());
 				ResultSet res = statement.executeQuery();
 				res.next();
 				Settings.setCollectorID(res.getInt("id"));
 			} catch (SQLException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}else {
-			query = "UPDATE crawler SET " +
+			// Update
+			query = "UPDATE simulator SET " +
 					"status_id = ?, " +
-					"last_seen_ts = extract(epoch from now())" +
+					"ip_adress = ?, " +
+					"last_seen_ts = extract(epoch from now()), " +
+					"url = NULL " + 
 					"WHERE id = ?";
 			try {
 				PreparedStatement statement = Settings.getDBC().prepareStatement(query);
-				statement.setInt(1, 1);
-				statement.setInt(2, Settings.getCollectorID());
+				statement.setInt(1, status_id);
+				statement.setString(2, getIp());
+				statement.setInt(3, Settings.getCollectorID());
 				statement.executeUpdate();
 			} catch (SQLException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
+		}
+	}
+	
+	public void setStatus(String status) throws StatusIdNotFoundException{
+		status_id = Status.getInstance().getStatusID(status);
+	}
+
+	@Override
+	public void run() {
+		while(true){
+			lastTimeRun = System.currentTimeMillis();
+			update();
+//			System.out.println("Update took " + (System.currentTimeMillis() - lastTimeRun) + "ms");
+			sleep(INTERVAL - (System.currentTimeMillis() - lastTimeRun));
+		}
+	}
+
+	private void sleep(long l) {
+		try {
+			Thread.sleep(l);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 }
