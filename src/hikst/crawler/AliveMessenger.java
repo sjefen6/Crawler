@@ -82,7 +82,7 @@ public class AliveMessenger implements Runnable {
 			// Update
 			query = "UPDATE crawler SET " +
 					"status_id = ?, " +
-					"last_seen_ts = extract(epoch from now()), " +
+					"last_seen_ts = extract(epoch from now()) " +
 					"WHERE id = ?";
 			try {
 				PreparedStatement statement = Settings.getDBC().prepareStatement(query);
